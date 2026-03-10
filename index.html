@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CineTrack</title>
+<style>
+body{
+margin:0;
+font-family:Segoe UI,Arial;
+background:#0f172a;
+color:white;
+}
+header{
+display:flex;
+align-items:center;
+justify-content:center;
+gap:12px;
+padding:20px;
+font-size:26px;
+font-weight:bold;
+}
+#logoImg{
+height:40px;
+display:none;
+}
+.searchBar{
+display:flex;
+flex-wrap:wrap;
+gap:10px;
+justify-content:center;
+padding:15px;
+}
+.searchBar input,
+.searchBar select{
+padding:10px;
+border-radius:8px;
+border:none;
+font-size:14px;
+}
+.searchBar input:first-child{
+width:260px;
+}
+#filmList{
+display:grid;
+grid-template-columns:repeat(auto-fill,200px);
+gap:30px;
+justify-content:center;
+padding:30px;
+}
+.card{
+width:200px;
+text-align:center;
+}
+.posterBox{
+position:relative;
+width:200px;
+height:300px;
+overflow:hidden;
+border-radius:10px;
+cursor:pointer;
+}
+.posterBox img{
+width:100%;
+height:100%;
+object-fit:cover;
+transition:0.3s;
+}
+.overlay{
+position:absolute;
+bottom:0;
+left:0;
+width:100%;
+height:100%;
+background:rgba(0,0,0,0.92);
+opacity:0;
+transition:0.3s;
+display:flex;
+flex-direction:column;
+padding:12px;
+box-sizing:border-box;
+overflow:auto;
+font-size:12px;
+}
+.posterBox:hover img{
+transform:scale(1.1);
+}
+.posterBox:hover .overlay{
+opacity:1;
+}
+.title{
+font-weight:bold;
+font-size:14px;
+margin-top:6px;
+}
+.meta{
+font-size:12px;
+color:#ccc;
+}
+.synopsis{
+margin-top:6px;
+line-height:1.4;
+}
+button{
+border:none;
+padding:6px;
+border-radius:6px;
+cursor:pointer;
+margin-top:5px;
+}
+.rate{background:#f59e0b;color:white}
+.watch{background:#22c55e;color:white}
+.remove{background:#ef4444;color:white}
+.edit{background:#3b82f6;color:white}
+#menuBtn{
+position:fixed;
+top:20px;
+left:20px;
+background:#1e293b;
+padding:8px 12px;
+border-radius:8px;
+cursor:pointer;
+z-index:2000;
+}
+#menuPanel{
+position:fixed;
+top:0;
+left:-270px;
+width:250px;
+height:100%;
+background:#1e293b;
+padding:20px;
+transition:0.3s;
+overflow:auto;
+z-index:1500;
+}
+#menuPanel.active{
+left:0;
+}
+#menuPanel h3{
+margin-top:60px;
+}
+#watchList{
+display:grid;
+grid-template-columns:repeat(auto-fill,180px);
+gap:15px;
+}
+#topBtn{
+position:fixed;
+bottom:25px;
+right:25px;
+background:#1e293b;
+color:white;
+border:none;
+padding:12px;
+border-radius:50%;
+cursor:pointer;
+display:none;
+}
+#wm{
+position:fixed;
+bottom:10px;
+right:10px;
+font-size:12px;
+opacity:0.6;
+}
+.empty{
+display:flex;
+align-items:center;
+justify-content:center;
+height:60vh;
+font-size:22px;
+text-align:center;
+}
+</style>
+</head>
+<body>
+
+<div id="menuBtn">☰</div>
+
+<div id="menuPanel">
+<h3>Admin</h3>
+<input id="adminPass" type="password" placeholder="password">
+<button onclick="loginAdmin()">Login</button>
+
+<div id="adminPanel" style="display:none">
+<h4>Tambah / Edit Film</h4>
+<input id="title" placeholder="Judul">
+<input id="genre" placeholder="Genre">
+<input id="year" placeholder="Tahun">
+<input id="country" placeholder="Negara">
+<input id="poster" placeholder="URL Poster">
+<input id="rating" type="number" min="1" max="5" placeholder="Rating">
+<textarea id="synopsis" placeholder="Sinopsis"></textarea>
+<button onclick="saveFilm()">Simpan Film</button>
+
+<h4>Logo CineTrack</h4>
+<input type="file" id="logoInput">
+<button onclick="setLogo()">Set Logo</button>
+</div>
+
+<hr>
+<h3>Watchlist</h3>
+<input id="watchSearch" placeholder="Cari judul">
+<div id="watchList"></div>
+</div>
+
+<header>
+<img id="logoImg">
+<span>CineTrack</span>
+</header>
+
+<div class="searchBar">
+<input id="searchTitle" placeholder="Cari judul film">
+<input id="searchGenre" placeholder="Genre">
+<input id="searchYear" placeholder="Tahun">
+<input id="searchCountry" placeholder="Negara">
+<select id="sortRating">
+<option value="none">Urut berdasarkan</option>
+<option value="desc">Rating tertinggi</option>
+<option value="asc">Rating terendah</option>
+<option value="az">Judul A → Z</option>
+<option value="za">Judul Z → A</option>
+</select>
+</div>
+
+<div id="filmList"></div>
+<button id="topBtn">↑</button>
+<div id="wm">made by atala and bonar</div>
+
+<script>
+// ===== Variabel =====
+let films = JSON.parse(localStorage.getItem("films")) || [];
+let watchlist = JSON.parse(localStorage.getItem("watchlist")) || [];
+let logo = localStorage.getItem("logo");
+let editIndex = null;
+let isAdmin = false;
+
+// Tampilkan logo
+if(logo){
+    logoImg.src = logo;
+    logoImg.style.display = "block";
+}
+
+// ===== Admin & Film =====
+menuBtn.onclick = ()=> menuPanel.classList.toggle("active");
+document.addEventListener("click",(e)=>{
+    if(!menuPanel.contains(e.target)&&e.target!==menuBtn){
+        menuPanel.classList.remove("active");
+    }
+});
+
+function loginAdmin(){
+    if(adminPass.value==="bontal"){
+        adminPanel.style.display="block";
+        isAdmin=true;
+        alert("Admin login berhasil");
+        renderFilms();
+    }else alert("Password salah");
+}
+
+function setLogo(){
+    if(!isAdmin) return;
+    let file = logoInput.files[0];
+    let reader = new FileReader();
+    reader.onload = function(e){
+        localStorage.setItem("logo", e.target.result);
+        logoImg.src = e.target.result;
+        logoImg.style.display = "block";
+    }
+    reader.readAsDataURL(file);
+}
+
+function saveFilm(){
+    if(!isAdmin) return;
+    let f = {
+        title:title.value,
+        genre:genre.value,
+        year:year.value,
+        country:country.value,
+        poster:poster.value,
+        rating:parseFloat(rating.value),
+        synopsis:synopsis.value,
+        userRatings:[]
+    };
+    if(editIndex===null) films.push(f);
+    else {films[editIndex]=f; editIndex=null;}
+    localStorage.setItem("films", JSON.stringify(films));
+    renderFilms();
+    // Reset input
+    title.value=""; genre.value=""; year.value=""; country.value="";
+    poster.value=""; rating.value=""; synopsis.value="";
+}
+
+function editFilm(i){
+    if(!isAdmin) return;
+    let f = films[i];
+    title.value=f.title; genre.value=f.genre; year.value=f.year;
+    country.value=f.country; poster.value=f.poster;
+    rating.value=f.rating; synopsis.value=f.synopsis;
+    editIndex=i;
+    menuPanel.classList.add("active");
+}
+
+function deleteFilm(i){
+    if(!isAdmin) return;
+    if(confirm("Hapus film ini?")){
+        films.splice(i,1);
+        localStorage.setItem("films", JSON.stringify(films));
+        renderFilms();
+        renderWatchlist();
+    }
+}
+
+// ===== Safety check untuk userRatings =====
+function avgRating(f){
+    let ratings = Array.isArray(f.userRatings) ? f.userRatings : [];
+    let arr = [f.rating, ...ratings];
+    let total = arr.reduce((a,b)=>a+b,0);
+    return Math.round((total/arr.length)*10)/10;
+}
+
+function ratingCount(f){
+    let ratings = Array.isArray(f.userRatings) ? f.userRatings : [];
+    return ratings.length + 1;
+}
+
+function rateFilm(i){
+    let r=parseFloat(prompt("Rating 1-5"));
+    if(r>=1 && r<=5){
+        if(!Array.isArray(films[i].userRatings)) films[i].userRatings=[];
+        films[i].userRatings.push(r);
+        localStorage.setItem("films", JSON.stringify(films));
+        renderFilms();
+    }
+}
+
+function addWatch(i){
+    if(!watchlist.includes(i)){
+        watchlist.push(i);
+        localStorage.setItem("watchlist",JSON.stringify(watchlist));
+        renderWatchlist();
+    }
+}
+
+function removeWatch(i){
+    watchlist=watchlist.filter(x=>x!==i);
+    localStorage.setItem("watchlist",JSON.stringify(watchlist));
+    renderWatchlist();
+}
+
+// ===== Rendering =====
+function createCard(f,i,parent,isWatch){
+    let avg=avgRating(f);
+    let count=ratingCount(f);
+    let card=document.createElement("div");
+    card.className="card";
+    card.innerHTML=`
+<div class="posterBox">
+<img src="${f.poster}">
+<div class="overlay">
+<div class="title">${f.title}</div>
+<div class="meta">${f.genre} | ${f.year}</div>
+<div class="meta">${f.country}</div>
+<div class="meta">⭐ ${avg} (${count})</div>
+<div class="synopsis">${f.synopsis}</div>
+<button class="rate" onclick="rateFilm(${i})">Rate</button>
+${isWatch?
+`<button class="remove" onclick="removeWatch(${i})">Hapus</button>`:
+`<button class="watch" onclick="addWatch(${i})">Watchlist</button>
+${isAdmin?`<button class="edit" onclick="editFilm(${i})">Edit</button>
+<button class="remove" onclick="deleteFilm(${i})">Delete</button>`:""}`}
+</div>
+</div>
+<div class="title">${f.title}</div>
+`;
+    parent.appendChild(card);
+}
+
+function renderFilms(){
+    filmList.innerHTML="";
+    if(films.length===0){
+        filmList.innerHTML=`<div class="empty">Belum ada film, admin bisa menambahkannya.</div>`;
+        return;
+    }
+    films.forEach((f,i)=>createCard(f,i,filmList,false));
+}
+
+function renderWatchlist(){
+    let box=watchList;
+    let s=watchSearch.value.toLowerCase();
+    box.innerHTML="";
+    watchlist.forEach(i=>{
+        let f=films[i];
+        if(!f) return; // film mungkin sudah dihapus
+        if(s && !f.title.toLowerCase().includes(s)) return;
+        createCard(f,i,box,true);
+    });
+}
+
+function searchFilms(){
+    let title=searchTitle.value.toLowerCase();
+    let genre=searchGenre.value.toLowerCase();
+    let year=searchYear.value;
+    let country=searchCountry.value.toLowerCase();
+    let sort=sortRating.value;
+    let result=films.filter(f=>
+        (!title||f.title.toLowerCase().includes(title))&&
+        (!genre||f.genre.toLowerCase().includes(genre))&&
+        (!year||f.year.includes(year))&&
+        (!country||f.country.toLowerCase().includes(country))
+    );
+    if(sort==="desc") result.sort((a,b)=>avgRating(b)-avgRating(a));
+    else if(sort==="asc") result.sort((a,b)=>avgRating(a)-avgRating(b));
+    else if(sort==="az") result.sort((a,b)=>a.title.localeCompare(b.title));
+    else if(sort==="za") result.sort((a,b)=>b.title.localeCompare(a.title));
+    
+    filmList.innerHTML="";
+    if(result.length===0){
+        filmList.innerHTML=`<div class="empty">Belum ada film sesuai filter.</div>`;
+        return;
+    }
+    result.forEach((f,i)=>createCard(f,i,filmList,false));
+}
+
+// ===== Event =====
+document.querySelectorAll("#searchTitle,#searchGenre,#searchYear,#searchCountry,#sortRating")
+.forEach(el=>el.addEventListener("input",searchFilms));
+watchSearch.oninput=renderWatchlist;
+
+window.onscroll=()=>{
+    if(document.documentElement.scrollTop>200) topBtn.style.display="block";
+    else topBtn.style.display="none";
+};
+topBtn.onclick=()=>window.scrollTo({top:0,behavior:"smooth"});
+
+// ===== Initial render =====
+renderFilms();
+renderWatchlist();
+</script>
+</body>
+</html>
